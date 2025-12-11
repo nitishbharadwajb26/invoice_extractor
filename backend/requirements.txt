@@ -12,3 +12,4 @@ openai==1.57.4
 cryptography==44.0.0
 python-multipart==0.0.20
 pydantic[email]
+requests>=2.31.0

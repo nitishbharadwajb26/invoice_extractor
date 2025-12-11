@@ -1,5 +1,5 @@
-import json
 import hashlib
+import requests
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ settings = get_settings()
 security = HTTPBearer()
 
 SCOPES = [
+    "openid",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
@@ -58,22 +59,29 @@ class AuthService:
 
     def handle_callback(self, code: str, extraction_mode: str = "local") -> tuple[UserSchema, str]:
         """Handle OAuth callback and create/update user."""
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": settings.google_client_id,
-                    "client_secret": settings.google_client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [settings.google_redirect_uri],
-                }
+        # Exchange code for tokens directly to avoid scope mismatch error
+        token_response = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": settings.google_redirect_uri,
             },
-            scopes=SCOPES,
         )
-        flow.redirect_uri = settings.google_redirect_uri
-        flow.fetch_token(code=code)
+        token_data = token_response.json()
 
-        credentials = flow.credentials
+        if "error" in token_data:
+            raise Exception(f"Token exchange failed: {token_data.get('error_description', token_data['error'])}")
+
+        credentials = Credentials(
+            token=token_data["access_token"],
+            refresh_token=token_data.get("refresh_token"),
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=settings.google_client_id,
+            client_secret=settings.google_client_secret,
+        )
 
         # Get user info from Google
         service = build("oauth2", "v2", credentials=credentials)
