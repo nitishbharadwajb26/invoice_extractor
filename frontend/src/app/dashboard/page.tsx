@@ -16,6 +16,8 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { Toast, ToastType } from "@/components/ui/Toast";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { LabelSelector } from "@/components/LabelSelector";
 import { InvoiceTable } from "@/components/InvoiceTable";
 import { Pagination } from "@/components/Pagination";
@@ -42,6 +44,16 @@ export default function Dashboard() {
 
   const [showModeModal, setShowModeModal] = useState(false);
   const [newMode, setNewMode] = useState<"local" | "openai">("local");
+
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; invoiceId: number | null }>({
+    isOpen: false,
+    invoiceId: null,
+  });
+  const [deleting, setDeleting] = useState(false);
+
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   const loadInvoices = useCallback(async (pageNum: number = 1) => {
     setInvoicesLoading(true);
@@ -117,15 +129,29 @@ export default function Dashboard() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this invoice?")) return;
+  const handleDeleteClick = (id: number) => {
+    setDeleteModal({ isOpen: true, invoiceId: id });
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteModal.invoiceId) return;
+
+    setDeleting(true);
     try {
-      await deleteInvoice(id);
+      await deleteInvoice(deleteModal.invoiceId);
       await Promise.all([loadInvoices(page), loadAllInvoices()]);
+      setToast({ message: "Invoice deleted successfully", type: "success" });
     } catch (err) {
       console.error("Delete error:", err);
+      setToast({ message: "Failed to delete invoice", type: "error" });
+    } finally {
+      setDeleting(false);
+      setDeleteModal({ isOpen: false, invoiceId: null });
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteModal({ isOpen: false, invoiceId: null });
   };
 
   const handleExport = async () => {
@@ -288,7 +314,7 @@ export default function Dashboard() {
           <InvoiceTable
             invoices={invoices}
             loading={invoicesLoading}
-            onDelete={handleDelete}
+            onDelete={handleDeleteClick}
           />
           <Pagination
             page={page}
@@ -347,6 +373,28 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="Delete Invoice"
+        message="Are you sure you want to delete this invoice? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        loading={deleting}
+      />
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   );

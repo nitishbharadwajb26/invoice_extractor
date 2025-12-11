@@ -36,6 +36,22 @@ export async function getAuthUrl(extractionMode: string): Promise<string> {
   return data.url;
 }
 
+export async function exchangeAuthCode(code: string): Promise<string> {
+  const response = await fetch(`${API_URL}/auth/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Exchange failed" }));
+    throw new Error(error.detail || "Failed to exchange auth code");
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
 export async function getCurrentUser(): Promise<User> {
   const response = await fetchWithAuth("/user/me");
   return response.json();
