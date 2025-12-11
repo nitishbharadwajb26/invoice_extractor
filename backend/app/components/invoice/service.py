@@ -30,12 +30,15 @@ class InvoiceService:
             InvoiceSchema.user_id == user_id
         ).first()
 
-    def get_by_email_id(self, email_id: str, user_id: int) -> InvoiceSchema | None:
-        """Check if invoice already exists for email."""
-        return self.db.query(InvoiceSchema).filter(
+    def get_by_email_id(self, email_id: str, user_id: int, file_name: str = None) -> InvoiceSchema | None:
+        """Check if invoice already exists for email (and optionally filename)."""
+        query = self.db.query(InvoiceSchema).filter(
             InvoiceSchema.email_id == email_id,
             InvoiceSchema.user_id == user_id
-        ).first()
+        )
+        if file_name:
+            query = query.filter(InvoiceSchema.file_name == file_name)
+        return query.first()
 
     def list_invoices(self, user_id: int, page: int = 1, limit: int = 20) -> InvoiceListResponse:
         """List invoices with pagination."""

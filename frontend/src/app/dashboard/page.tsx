@@ -19,12 +19,14 @@ import { Spinner } from "@/components/ui/Spinner";
 import { LabelSelector } from "@/components/LabelSelector";
 import { InvoiceTable } from "@/components/InvoiceTable";
 import { Pagination } from "@/components/Pagination";
+import { SpendingSummary } from "@/components/SpendingSummary";
 
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -34,6 +36,7 @@ export default function Dashboard() {
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,11 +49,21 @@ export default function Dashboard() {
       const data = await getInvoices(pageNum, 20);
       setInvoices(data.items);
       setTotalPages(Math.ceil(data.total / data.limit));
+      setTotalCount(data.total);
       setPage(pageNum);
     } catch (err) {
       console.error("Failed to load invoices:", err);
     } finally {
       setInvoicesLoading(false);
+    }
+  }, []);
+
+  const loadAllInvoices = useCallback(async () => {
+    try {
+      const data = await getInvoices(1, 1000);
+      setAllInvoices(data.items);
+    } catch (err) {
+      console.error("Failed to load all invoices:", err);
     }
   }, []);
 
@@ -69,7 +82,7 @@ export default function Dashboard() {
         setUser(userData);
         setLabels(labelsData);
         setNewMode(userData.extraction_mode);
-        await loadInvoices();
+        await Promise.all([loadInvoices(), loadAllInvoices()]);
       } catch (err) {
         console.error("Init error:", err);
         clearToken();
@@ -80,7 +93,7 @@ export default function Dashboard() {
     };
 
     init();
-  }, [router, loadInvoices]);
+  }, [router, loadInvoices, loadAllInvoices]);
 
   const handleSync = async () => {
     if (!selectedLabel) {
@@ -95,7 +108,7 @@ export default function Dashboard() {
     try {
       const result = await syncEmails(selectedLabel);
       setSyncResult(result);
-      await loadInvoices(1);
+      await Promise.all([loadInvoices(1), loadAllInvoices()]);
     } catch (err) {
       setError("Failed to sync emails. Please try again.");
       console.error("Sync error:", err);
@@ -109,7 +122,7 @@ export default function Dashboard() {
 
     try {
       await deleteInvoice(id);
-      await loadInvoices(page);
+      await Promise.all([loadInvoices(page), loadAllInvoices()]);
     } catch (err) {
       console.error("Delete error:", err);
     }
@@ -148,22 +161,35 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Spinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-bold text-gray-900">
-            Gmail Invoice Extractor
-          </h1>
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Invoice Dashboard</h1>
+              <p className="text-xs text-gray-500">Manage your extracted invoices</p>
+            </div>
+          </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.email}</span>
+            <div className="text-right hidden sm:block">
+              <div className="text-sm font-medium text-gray-900">{user?.name || user?.email}</div>
+              <div className="text-xs text-gray-500">
+                {user?.extraction_mode === "openai" ? "AI Mode" : "Local Mode"}
+              </div>
+            </div>
             <Button variant="secondary" onClick={handleLogout}>
               Logout
             </Button>
@@ -172,18 +198,23 @@ export default function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* Mode & Controls */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* Spending Summary */}
+        <div className="mb-6">
+          <SpendingSummary invoices={allInvoices} />
+        </div>
+
+        {/* Controls Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg">
               <span className="text-sm text-gray-600">Mode:</span>
-              <span className="font-medium">
-                {user?.extraction_mode === "openai" ? "OpenAI" : "Local"} Processing
+              <span className="font-medium text-gray-900">
+                {user?.extraction_mode === "openai" ? "OpenAI" : "Local"}
               </span>
               <button
                 onClick={() => setShowModeModal(true)}
-                className="text-blue-600 text-sm hover:underline"
+                className="text-blue-600 text-sm hover:underline ml-1"
               >
                 Change
               </button>
@@ -198,6 +229,9 @@ export default function Dashboard() {
             />
 
             <Button onClick={handleSync} loading={syncing} disabled={!selectedLabel}>
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
               Sync Emails
             </Button>
 
@@ -207,33 +241,50 @@ export default function Dashboard() {
               loading={exporting}
               disabled={invoices.length === 0}
             >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
               Export CSV
             </Button>
           </div>
 
           {/* Sync Result */}
           {syncResult && (
-            <div className="mt-4 p-3 bg-green-50 text-green-800 rounded-md">
-              Processed {syncResult.emails_processed} emails, extracted{" "}
-              {syncResult.invoices_extracted} invoices.
-              {syncResult.errors.length > 0 && (
-                <span className="text-orange-600 ml-2">
-                  ({syncResult.errors.length} errors)
-                </span>
-              )}
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg flex items-center gap-3">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>
+                Processed {syncResult.emails_processed} emails, extracted{" "}
+                <strong>{syncResult.invoices_extracted}</strong> invoices.
+                {syncResult.errors.length > 0 && (
+                  <span className="text-orange-600 ml-2">
+                    ({syncResult.errors.length} errors)
+                  </span>
+                )}
+              </span>
             </div>
           )}
 
           {/* Error */}
           {error && (
-            <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md">
-              {error}
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-3">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
             </div>
           )}
         </div>
 
         {/* Invoice Table */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Invoices</h2>
+            {totalCount > 0 && (
+              <span className="text-sm text-gray-500">{totalCount} total</span>
+            )}
+          </div>
           <InvoiceTable
             invoices={invoices}
             loading={invoicesLoading}
@@ -249,28 +300,36 @@ export default function Dashboard() {
 
       {/* Mode Change Modal */}
       {showModeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
             <h3 className="text-lg font-semibold mb-4">Change Extraction Mode</h3>
 
             <div className="space-y-3 mb-6">
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                 <input
                   type="radio"
                   name="newMode"
                   checked={newMode === "local"}
                   onChange={() => setNewMode("local")}
+                  className="accent-blue-600"
                 />
-                <span>Local Processing (Privacy)</span>
+                <div>
+                  <span className="font-medium">Local Processing</span>
+                  <p className="text-sm text-gray-500">Privacy focused</p>
+                </div>
               </label>
-              <label className="flex items-center gap-3">
+              <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                 <input
                   type="radio"
                   name="newMode"
                   checked={newMode === "openai"}
                   onChange={() => setNewMode("openai")}
+                  className="accent-blue-600"
                 />
-                <span>OpenAI Processing (Accuracy)</span>
+                <div>
+                  <span className="font-medium">OpenAI Processing</span>
+                  <p className="text-sm text-gray-500">Better accuracy</p>
+                </div>
               </label>
             </div>
 

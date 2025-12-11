@@ -158,7 +158,7 @@ Given more time, I would add:
 4. **Advanced Filtering**: Filter invoices by date, vendor, amount range
 5. **Duplicate Detection**: Better detection of duplicate invoices
 6. **Multiple File Support**: Handle ZIP attachments with multiple invoices
-7. **OCR Support**: Handle scanned PDF invoices using OCR
+7. **OCR Support**: Handle scanned PDF invoices (images) using OCR
 8. **Webhooks**: Real-time sync using Gmail push notifications
 9. **Multi-user Support**: Proper user sessions with JWT tokens
 10. **Testing**: Comprehensive unit and integration tests

@@ -18,7 +18,7 @@ def get_invoice_service(db: Session = Depends(get_db)) -> InvoiceService:
 @invoice_router.get("", response_model=InvoiceListResponse)
 def list_invoices(
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=1000),
     current_user: UserSchema = Depends(get_current_user),
     service: InvoiceService = Depends(get_invoice_service),
 ):

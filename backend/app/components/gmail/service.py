@@ -54,6 +54,9 @@ class GmailSyncService:
 
     def sync_emails(self, label_id: str) -> SyncResponse:
         """Sync emails from label and extract invoice data."""
+        # Clear SQLAlchemy cache to get fresh data
+        self.db.expire_all()
+
         emails_processed = 0
         invoices_extracted = 0
         errors = []
@@ -74,18 +77,11 @@ class GmailSyncService:
             for msg_info in messages:
                 msg_id = msg_info["id"]
 
-                # Skip if already processed
-                existing = self.invoice_service.get_by_email_id(msg_id, self.user.id)
-                if existing:
-                    continue
-
                 try:
                     # Fetch full message
                     message = self.gmail_service.users().messages().get(
                         userId="me", id=msg_id, format="full"
                     ).execute()
-
-                    emails_processed += 1
 
                     # Extract email metadata
                     headers = message.get("payload", {}).get("headers", [])
@@ -102,7 +98,18 @@ class GmailSyncService:
                     # Find PDF attachments
                     attachments = self._get_pdf_attachments(message)
 
+                    if not attachments:
+                        continue
+
+                    emails_processed += 1
+
                     for filename, pdf_content in attachments:
+                        # Skip if this specific file already processed
+                        existing = self.invoice_service.get_by_email_id(msg_id, self.user.id, filename)
+                        if existing:
+                            logger.info(f"Skipping already processed: {filename}")
+                            continue
+
                         try:
                             extracted = extractor.extract(pdf_content)
 
