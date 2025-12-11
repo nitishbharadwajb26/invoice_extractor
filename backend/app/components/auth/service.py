@@ -1,22 +1,18 @@
-import hashlib
 import requests
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
-from app.database import get_db
 from app.core.config import get_settings
-from app.core.security import encrypt_token, decrypt_token
+from app.core.security import encrypt_token
 from app.core.logger import get_logger
 from app.components.user.schema import UserSchema
 from app.components.user.service import UserService
+from app.components.auth.auth_utils import create_access_token
 
 logger = get_logger(__name__)
 settings = get_settings()
-security = HTTPBearer()
 
 SCOPES = [
     "openid",
@@ -102,50 +98,12 @@ class AuthService:
             extraction_mode=extraction_mode,
         )
 
-        # Generate simple session token (user_id hash)
-        session_token = self._generate_session_token(user.id)
+        # Generate JWT access token
+        access_token = create_access_token(user.id, email)
         logger.info(f"OAuth completed for {email}")
 
-        return user, session_token
-
-    def _generate_session_token(self, user_id: int) -> str:
-        """Generate session token for user."""
-        data = f"{user_id}:{settings.secret_key}"
-        return hashlib.sha256(data.encode()).hexdigest()
-
-    def verify_session_token(self, token: str) -> UserSchema | None:
-        """Verify session token and return user."""
-        users = self.db.query(UserSchema).all()
-        for user in users:
-            expected = self._generate_session_token(user.id)
-            if token == expected:
-                return user
-        return None
+        return user, access_token
 
     def logout(self, user_id: int) -> bool:
         """Clear user tokens on logout."""
         return self.user_service.clear_tokens(user_id)
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
-) -> UserSchema:
-    """Dependency to get current authenticated user."""
-    token = credentials.credentials
-    auth_service = AuthService(db)
-    user = auth_service.verify_session_token(token)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    if not user.google_access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not connected to Gmail",
-        )
-
-    return user

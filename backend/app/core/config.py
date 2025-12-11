@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./invoices.db")
     secret_key: str = Field(default="your-secret-key-change-in-production")
 
+    # JWT
+    jwt_secret: str = Field(default="yuftyuergfergfegrfehufhguiehgiuehrgjhrthgoehgkjhfg")
+    jwt_algorithm: str = Field(default="HS256")
+    access_token_expire_mins: int = Field(default=60)
+
     # Google OAuth
     google_client_id: Optional[str] = Field(default=None)
     google_client_secret: Optional[str] = Field(default=None)

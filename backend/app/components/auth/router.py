@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.core.config import get_settings
 from app.core.logger import get_logger
-from app.components.auth.service import AuthService, get_current_user
-from app.components.user.schema import UserSchema
+from app.components.auth.service import AuthService
+from app.components.auth.dependencies import validate_access_token
+from app.components.auth.auth_utils import TokenData
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -50,9 +51,9 @@ def google_callback(
 
 @auth_router.post("/logout")
 def logout(
-    current_user: UserSchema = Depends(get_current_user),
+    token_data: TokenData = Depends(validate_access_token),
     service: AuthService = Depends(get_auth_service),
 ):
     """Logout and clear tokens."""
-    service.logout(current_user.id)
+    service.logout(token_data.user_id)
     return JSONResponse(content={"message": "Logged out successfully"})
