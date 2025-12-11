@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { User, Label, Invoice, SyncResult } from "@/types";
 import { isAuthenticated, clearToken } from "@/lib/auth";
@@ -27,7 +27,6 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
@@ -55,14 +54,15 @@ export default function Dashboard() {
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
-  const loadInvoices = useCallback(async (pageNum: number = 1) => {
+  const PAGE_SIZE = 20;
+
+  const loadInvoices = useCallback(async () => {
     setInvoicesLoading(true);
     try {
-      const data = await getInvoices(pageNum, 20);
-      setInvoices(data.items);
-      setTotalPages(Math.ceil(data.total / data.limit));
+      const data = await getInvoices(1, 300);
+      setAllInvoices(data.items);
       setTotalCount(data.total);
-      setPage(pageNum);
+      setTotalPages(Math.ceil(data.total / PAGE_SIZE));
     } catch (err) {
       console.error("Failed to load invoices:", err);
     } finally {
@@ -70,14 +70,11 @@ export default function Dashboard() {
     }
   }, []);
 
-  const loadAllInvoices = useCallback(async () => {
-    try {
-      const data = await getInvoices(1, 1000);
-      setAllInvoices(data.items);
-    } catch (err) {
-      console.error("Failed to load all invoices:", err);
-    }
-  }, []);
+  // Derive current page invoices from allInvoices
+  const invoices = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return allInvoices.slice(start, start + PAGE_SIZE);
+  }, [allInvoices, page]);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -94,7 +91,7 @@ export default function Dashboard() {
         setUser(userData);
         setLabels(labelsData);
         setNewMode(userData.extraction_mode);
-        await Promise.all([loadInvoices(), loadAllInvoices()]);
+        await loadInvoices();
       } catch (err) {
         console.error("Init error:", err);
         clearToken();
@@ -105,7 +102,7 @@ export default function Dashboard() {
     };
 
     init();
-  }, [router, loadInvoices, loadAllInvoices]);
+  }, [router, loadInvoices]);
 
   const handleSync = async () => {
     if (!selectedLabel) {
@@ -120,7 +117,8 @@ export default function Dashboard() {
     try {
       const result = await syncEmails(selectedLabel);
       setSyncResult(result);
-      await Promise.all([loadInvoices(1), loadAllInvoices()]);
+      setPage(1);
+      await loadInvoices();
     } catch (err) {
       setError("Failed to sync emails. Please try again.");
       console.error("Sync error:", err);
@@ -139,7 +137,7 @@ export default function Dashboard() {
     setDeleting(true);
     try {
       await deleteInvoice(deleteModal.invoiceId);
-      await Promise.all([loadInvoices(page), loadAllInvoices()]);
+      await loadInvoices();
       setToast({ message: "Invoice deleted successfully", type: "success" });
     } catch (err) {
       console.error("Delete error:", err);
@@ -319,7 +317,7 @@ export default function Dashboard() {
           <Pagination
             page={page}
             totalPages={totalPages}
-            onPageChange={loadInvoices}
+            onPageChange={setPage}
           />
         </div>
       </main>
