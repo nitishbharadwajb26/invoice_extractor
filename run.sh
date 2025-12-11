@@ -28,7 +28,7 @@ echo "Starting Gmail Invoice Extractor..."
 # Start Backend
 echo "Starting Backend on http://localhost:8000"
 cd backend
-source venv/Scripts/activate 2>/dev/null || source venv/bin/activate
+source .venv/Scripts/activate 2>/dev/null || source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000 &
 BACKEND_PID=$!
 cd ..

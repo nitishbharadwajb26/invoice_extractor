@@ -24,7 +24,7 @@ echo.
 
 REM Start Backend in new window
 echo Starting Backend on http://localhost:8000
-start "Backend" cmd /k "cd /d %~dp0backend && venv\Scripts\activate && uvicorn app.main:app --reload --port 8000"
+start "Backend" cmd /k "cd /d %~dp0backend && .venv\Scripts\activate && uvicorn app.main:app --reload --port 8000"
 
 REM Wait for backend
 timeout /t 3 /nobreak > nul
@@ -42,3 +42,6 @@ echo API Docs: http://localhost:8000/docs
 echo ============================================
 echo Close the terminal windows to stop servers
 echo.
+
+REM Open in browser
+start http://localhost:3000
